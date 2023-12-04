@@ -1,0 +1,65 @@
+name: manually_deploy_to_dev
+
+on:
+  workflow_dispatch
+
+env:
+  DBX_ENV: dev
+
+jobs:
+  deploy_to_dev:
+    environment: dev
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.7"
+
+      - name: Install python dependencies
+        run: |
+          python -m pip install --upgrade Repos
+          pip install -r requirements.txt
+          
+      - name: Deploy code as a Databricks Repos
+        run: |
+          export PYTHONPATH = $PYTHONPATH:$GITHUB_WORKSPACE
+          python ./.github/scrips/deploy_code.py \
+          --host ${{vars.DATABRICKS_HOST}} \
+          --tenant-id ${{secrets.TENANT_ID}} \
+          --spn-client-id ${{secrets.SPN_CLIENT_ID}} \
+          --spn-client-secret ${{secrets.SPN_CLIENT_SECRET}} \
+          --repository $GITHUB_REPOSITORY \
+          --branch-name $GITHUB_REF_NAME \
+          --env $DBX_ENV \
+          --deployment-type manual
+
+      - name: Create Databricks workflows, DLT pipeline and cluster necessary for integration tests
+        run: |
+          export PYTHONPATH = $PYTHONPATH:$GITHUB_WORKSPACE
+          python ./.github/scrips/create_jobs.py \
+          --host ${{vars.DATABRICKS_HOST}} \
+          --tenant-id ${{secrets.TENANT_ID}} \
+          --spn-client-id ${{secrets.SPN_CLIENT_ID}} \
+          --spn-client-secret ${{secrets.SPN_CLIENT_SECRET}} \
+          --repository $GITHUB_REPOSITORY \
+          --branch-name $GITHUB_REF_NAME \
+          --timeout 5400 \
+          --env $DBX_ENV \
+          --deployment-type manual
+
+      - name: Set open permissions on Repos, workflows, DLT pipeline and clusters
+        run: |
+          export PYTHONPATH = $PYTHONPATH:$GITHUB_WORKSPACE
+          python ./.github/scrips/set_open_permissions.py \
+          --host ${{vars.DATABRICKS_HOST}} \
+          --tenant-id ${{secrets.TENANT_ID}} \
+          --spn-client-id ${{secrets.SPN_CLIENT_ID}} \
+          --spn-client-secret ${{secrets.SPN_CLIENT_SECRET}} \
+          --repository $GITHUB_REPOSITORY \
+          --branch-name $GITHUB_REF_NAME \
+          --env $DBX_ENV \
+          --deployment-type manual
